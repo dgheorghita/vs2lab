@@ -33,31 +33,43 @@ class Server:
 
     def serve(self):
         """Serve echo"""
+        self._logger.debug("Server starting...")
         self.sock.listen(1)
+        self._logger.debug("Server listening for connections...")
         while (
             self._serving
         ):  # as long as _serving (checked after connections or socket timeouts)
             try:
                 # pylint: disable=unused-variable
+                self._logger.debug("Waiting for client connection...")
                 (connection, address) = (
                     self.sock.accept()
                 )  # returns new socket and address of client
+                self._logger.info("Connection from " + str(address))
                 while True:  # forever
+                    self._logger.debug("Waiting for data...")
                     data = connection.recv(1024)  # receive data from client
                     if not data:
+                        self._logger.info("Client disconnected")
                         break  # stop if client stopped
+                    self._logger.debug("Data received: " + str(data))
                     request = data.decode("ascii")
                     if request == "*":
+                        self._logger.info("Sending all phonebook entries")
                         response = json.dumps(self.phonebook)
                     else:
+                        self._logger.info(f"Sending entry for {request}")
                         response = json.dumps(
                             {request: self.phonebook.get(request, None)}
                         )
+                    self._logger.debug("Sending response: " + response)
                     connection.send(
                         response.encode("utf-8")
                     )  # return sent data plus an "*"
+                self._logger.debug("Closing connection")
                 connection.close()  # close the connection
             except socket.timeout:
+                self._logger.debug("Socket timed out")
                 pass  # ignore timeouts
         self.sock.close()
         self._logger.info("Server down.")
