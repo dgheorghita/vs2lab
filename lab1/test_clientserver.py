@@ -5,6 +5,7 @@ Simple client server unit test
 import logging
 import threading
 import unittest
+import time
 
 import clientserver
 from context import lab_logging
@@ -23,6 +24,7 @@ class TestEchoService(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls._server_thread.start()  # start server loop in a thread (called only once)
+        time.sleep(0.2)
 
     def setUp(self):
         super().setUp()
