@@ -22,7 +22,7 @@ class Server:
     _serving = True
 
     def __init__(self):
-        self.phonebook = {"Alex": "+491514353453", "Bob": "+491233423423", "Charlie": "+49324234234124234"}
+        self.phonebook = {"Alex": "+491514353453", "Bob": "+491233423423", "Charlie": "+49324234234124234", "Björn": "12345"}
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(
             socket.SOL_SOCKET, socket.SO_REUSEADDR, 1
@@ -53,7 +53,7 @@ class Server:
                         self._logger.info("Client disconnected")
                         break  # stop if client stopped
                     self._logger.debug("Data received: " + str(data))
-                    request = data.decode("ascii")
+                    request = data.decode("utf-8")
                     if request == "*":
                         self._logger.info("Sending all phonebook entries")
                         response = json.dumps(self.phonebook)
@@ -87,19 +87,19 @@ class Client:
 
     def getall(self):
         self.logger.info("Attempting getting all entries")
-        self.sock.send("*".encode("ascii"))
+        self.sock.send("*".encode("utf-8"))
         self.logger.debug("Waiting for response...")
         data = self.sock.recv(1024)
         self.logger.debug("Received response")
-        return json.loads(data.decode("ascii"))
+        return json.loads(data.decode("utf-8"))
 
     def get(self, name: str):
         self.logger.info(f"Attempting getting entry for {name}")
-        self.sock.send(name.encode("ascii"))
+        self.sock.send(name.encode("utf-8"))
         self.logger.debug("Waiting for response...")
         data = self.sock.recv(1024)
         self.logger.debug("Received response")
-        return json.loads(data.decode("ascii"))
+        return json.loads(data.decode("utf-8"))
 
     def close(self):
         """Close socket"""
