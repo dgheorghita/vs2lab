@@ -10,7 +10,7 @@ from typing import Dict
 import const_cs
 from context import lab_logging
 
-lab_logging.setup(stream_level=logging.INFO)  # init loging channels for the lab
+lab_logging.setup(stream_level=logging.DEBUG)  # init loging channels for the lab
 
 # pylint: disable=logging-not-lazy, line-too-long
 
@@ -74,15 +74,22 @@ class Client:
         self.logger.info("Client connected to socket " + str(self.sock))
 
     def getall(self):
+        self.logger.info("Attempting getting all entries")
         self.sock.send("*".encode("ascii"))
+        self.logger.debug("Waiting for response...")
         data = self.sock.recv(1024)
+        self.logger.debug("Received response")
         return json.loads(data.decode("ascii"))
 
     def get(self, name: str):
+        self.logger.info(f"Attempting getting entry for {name}")
         self.sock.send(name.encode("ascii"))
+        self.logger.debug("Waiting for response...")
         data = self.sock.recv(1024)
+        self.logger.debug("Received response")
         return json.loads(data.decode("ascii"))
 
     def close(self):
         """Close socket"""
+        self.logger.debug("Closing socket")
         self.sock.close()
