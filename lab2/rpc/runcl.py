@@ -19,6 +19,5 @@ for i in range(5):
   time.sleep(1)
 
 
-
-time.sleep(20)
+time.sleep(10)
 cl.stop()
