@@ -14,10 +14,10 @@ cl.run()
 
 base_list = rpc.DBList({'foo'})
 cl.append('test', base_list, on_result)
-for i in range(5):
+for i in range(15):
   print("client is working something else")
   time.sleep(1)
 
 
-time.sleep(10)
+
 cl.stop()
