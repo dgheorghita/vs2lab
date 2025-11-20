@@ -25,6 +25,7 @@ class Client:
         self.server = self.chan.subgroup('server')
 
     def stop(self):
+        print("Client exited")
         self.chan.leave('client')
 
     
