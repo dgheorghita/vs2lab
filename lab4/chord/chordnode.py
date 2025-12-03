@@ -147,16 +147,22 @@ class ChordNode:
                 break
 
             if request[0] == constChord.LOOKUP_REQ:  # A lookup request
+                original_client = request[2]
+                    
                 self.logger.info("Node {:04n} received LOOKUP {:04n} from {:04n}."
-                                 .format(self.node_id, int(request[1]), int(sender)))
+                                 .format(self.node_id, int(request[1]), int(original_client)))
 
-                # look up and return local successor 
-                next_id: int = self.local_successor_node(request[1])
-                self.channel.send_to([sender], (constChord.LOOKUP_REP, next_id))
-
-                # Finally do a sanity check
-                if not self.channel.exists(next_id):  # probe for existence
-                    self.delete_node(next_id)  # purge disappeared node
+                if self.in_between(request[1], self.finger_table[0] + 1, self.node_id + 1):
+                    # This node is the actual successor
+                    self.channel.send_to([original_client], (constChord.LOOKUP_REP, request[1], self.node_id))
+                else:
+                    next_node = self.local_successor_node(request[1])
+                    next_node_str = str(next_node)
+                    if self.channel.exists(next_node):
+                        self.channel.send_to([next_node_str], (constChord.LOOKUP_REQ, request[1], original_client))
+                    else:
+                        self.logger.warning(f"Next node {next_node} not in channel, removing from list")
+                        self.delete_node(next_node) # purge disappeared node
 
             elif request[0] == constChord.JOIN:
                 # Join request (the node was already registered above)
