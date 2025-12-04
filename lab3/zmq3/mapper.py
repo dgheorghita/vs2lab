@@ -3,6 +3,7 @@ import pickle
 import sys
 import time
 import zmq
+import hashlib
 
 REDUCERS = [constPipe.PORT4, constPipe.PORT5]
 
@@ -16,7 +17,7 @@ class Mapper:
 
     def assign_reducer(self, word): 
         #entscheidet reducer
-        return REDUCERS[hash(word) % len(REDUCERS)]
+        return REDUCERS[int(hashlib.md5(word.encode()).hexdigest(), 16) % len(REDUCERS)]
 
     def run(self):
         context = zmq.Context()
