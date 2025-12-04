@@ -41,7 +41,7 @@ class DummyChordClient:
         (constChord.LOOKUP_REQ, key, self.node_id))
         
         while True:
-            msg = self.channel.receive_from_any()
+            sender, msg = self.channel.receive_from_any()
             if msg[0] == constChord.LOOKUP_REP and msg[1] == key:
                 print(f"[Client] Key {key} found at node {msg[2]}")
                 break
