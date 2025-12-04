@@ -1,0 +1,15 @@
+Terminal 1 & 2: Start reducers
+------------------------------
+cd /workspaces/vs2lab/lab3/wordcount
+pipenv run python reducer.py 0
+pipenv run python reducer.py 1
+
+Terminal 3, 4 & 5: Start mappers  
+---------------------------------
+pipenv run python mapper.py 1
+pipenv run python mapper.py 2
+pipenv run python mapper.py 3
+
+Terminal 6: Start splitter (this begins processing)
+---------------------------------------------------
+pipenv run python splitter.py
