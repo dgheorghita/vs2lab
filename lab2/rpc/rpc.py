@@ -3,6 +3,8 @@ import time
 import threading
 
 from context import lab_channel
+import logging
+logger = logging.getLogger('vs2lab.lab2.rpc.server')
 
 
 class DBList:
@@ -19,14 +21,27 @@ class Client:
         self.chan = lab_channel.Channel()
         self.client = self.chan.join('client')
         self.server = None
+        self.callbacks = {}
+        self.running = False
 
     def run(self):
         self.chan.bind(self.client)
         self.server = self.chan.subgroup('server')
+        self.running = True
+        threading.Thread(target=self._listen_thread, daemon=True).start() # starts a listening Thread
 
     def stop(self):
         print("Client exited")
         self.chan.leave('client')
+        
+    def _listen_thread(self):
+        while self.running:
+            msg = self.chan.receive_from_any(timeout=1)
+            if msg is None:
+                continue
+
+            msg_type = msg[0]
+            req_id = msg[1]
 
     
     def append(self, data, db_list, callback):
@@ -60,6 +75,7 @@ class Server:
 
     def run(self):
         self.chan.bind(self.server)
+        logger.info("[Server] Running...")
         while True:
             msgreq = self.chan.receive_from_any(self.timeout)  # wait for any request
             if msgreq is not None:
