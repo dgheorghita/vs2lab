@@ -2,6 +2,7 @@ import pickle
 import sys
 import time
 import hashlib
+import string
 import zmq
 
 import constPipe
@@ -44,7 +45,8 @@ while True:
 
     words = sentence.split()
     for word in words:
-        #str.lower(word)
-        reducer_index = int(hashlib.md5(word.encode()).hexdigest(), 16) % 2
+        word = word.strip().lower().strip(string.punctuation) #cleaning
+        reducer_index = hash(word) % 2 
+        #reducer_index = int(hashlib.md5(word.encode()).hexdigest(), 16) % 2
         reducer_sockets[reducer_index].send_string(word)
         print(f"Mapper {me} sent '{word}' to Reducer {reducer_index + 1}")
