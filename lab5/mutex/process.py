@@ -4,7 +4,6 @@ import time
 
 from constMutex import ENTER, RELEASE, ALLOW, ACTIVE
 
-
 class Process:
     """
     Implements access management to a critical section (CS) via fully
@@ -14,8 +13,8 @@ class Process:
     logical (lamport) clocks. All messages are stored in local queues sorted by
     logical clock time.
 
-    Processes follow different behavioral patterns. An ACTIVE process competes 
-    with others for accessing the critical section. A PASSIVE process will never 
+    Processes follow different behavioral patterns. An ACTIVE process competes
+    with others for accessing the critical section. A PASSIVE process will never
     request to enter the critical section itself but will allow others to do so.
 
     A process broadcasts an ENTER request if it wants to enter the CS. A process
@@ -30,9 +29,9 @@ class Process:
 
     Message Format:
 
-    <Message>: (Timestamp, Process_ID, <Request_Type>)
-
-    <Request Type>: ENTER | ALLOW  | RELEASE
+    <Message> : (Timestamp, Process_ID, <Message_Type>)
+    <Message_Type> : ENTER | ALLOW | RELEASE
+    ERWEITERUNG: Absturz-Toleranz durch Timeout-basierte Fehlerdetektion
 
     """
 
@@ -46,6 +45,11 @@ class Process:
         self.peer_name = 'unassigned'  # The original peer name
         self.peer_type = 'unassigned'  # A flag indicating behavior pattern
         self.logger = logging.getLogger("vs2lab.lab5.mutex.process.Process")
+
+        # ERWEITERUNG: Fehlerdetektion
+        self.suspected_processes = set()  # Menge der vermuteten ausgefallenen Prozesse
+        self.last_response_time = {}  # Letzte Nachricht von jedem Prozess
+        self.timeout_threshold = 10  # Timeout in Sekunden
 
     def __mapid(self, id='-1'):
         # format channel member address
@@ -78,7 +82,6 @@ class Process:
     def __release(self):
         # need to be first in queue to issue a release
         assert self.queue[0][1] == self.process_id, 'State error: inconsistent local RELEASE'
-
         # construct new queue from later ENTER requests (removing all ALLOWS)
         tmp = [r for r in self.queue[1:] if r[2] == ENTER]
         self.queue = tmp  # and copy to new queue
@@ -87,13 +90,48 @@ class Process:
         # Multicast release notification
         self.channel.send_to(self.other_processes, msg)
 
+    def __detect_failures(self):
+        """
+            ERWEITERUNG: Überprüft, ob Prozesse ausgefallen sind basierend auf Timeouts
+            Nur aktiv wenn auf Antworten gewartet wird
+            """
+            # Nur detektieren wenn wir selbst Einträge in der Queue haben
+        if len(self.queue) == 0:
+                return  # Keine Aktivität = keine Fehlerdetektion nötig
+            
+        current_time = time.time()
+            
+        for proc_id in self.other_processes:
+            if proc_id not in self.suspected_processes:
+                if proc_id in self.last_response_time:
+                    time_since_last_response = current_time - self.last_response_time[proc_id]
+                    
+                    if time_since_last_response > self.timeout_threshold:
+                        # Prozess wird als ausgefallen markiert
+                        self.suspected_processes.add(proc_id)
+                        self.logger.warning("{} suspects {} has CRASHED (timeout: {:.2f}s).".format(
+                            self.__mapid(), self.__mapid(proc_id), time_since_last_response))
+                        
+                        # Entferne alle ENTER-Nachrichten des ausgefallenen Prozesses aus der Queue
+                        self.queue = [msg for msg in self.queue if msg[1] != proc_id]
+                        self.__cleanup_queue()
+                        
+                        self.logger.info("{} removed {} from queue after crash detection.".format(
+                            self.__mapid(), self.__mapid(proc_id)))
+
     def __allowed_to_enter(self):
+        # ERWEITERUNG: Nur nicht-verdächtigte Prozesse berücksichtigen
+        active_processes = [p for p in self.other_processes if p not in self.suspected_processes]
         # See who has sent a message (the set will hold at most one element per sender)
         processes_with_later_message = set([req[1] for req in self.queue[1:]])
-        # Access granted if this process is first in queue and all others have answered (logically) later
+
+        # Access granted if this process is first in queue and all ACTIVE (non-suspected) 
+        # others have answered (logically) later
+
         first_in_queue = self.queue[0][1] == self.process_id
-        all_have_answered = len(self.other_processes) == len(
-            processes_with_later_message)
+
+        all_have_answered = len(active_processes) == len(processes_with_later_message)
+
         return first_in_queue and all_have_answered
 
     def __receive(self):
@@ -101,7 +139,9 @@ class Process:
         _receive = self.channel.receive_from(self.other_processes, 3)
         if _receive:
             msg = _receive[1]
-
+            # ERWEITERUNG: Aktualisiere letzte Antwortzeit für Absenderprozess
+            sender_id = msg[1]
+            self.last_response_time[sender_id] = time.time()
             self.clock = max(self.clock, msg[0])  # Adjust clock value...
             self.clock = self.clock + 1  # ...and increment
 
@@ -119,17 +159,25 @@ class Process:
                 self.queue.append(msg)  # Append an ALLOW
             elif msg[2] == RELEASE:
                 # assure release requester indeed has access (his ENTER is first in queue)
-                assert self.queue[0][1] == msg[1] and self.queue[0][2] == ENTER, 'State error: inconsistent remote RELEASE'
-                del (self.queue[0])  # Just remove first message
-
+                # Bei Fehlerdetektion könnte die Queue bereits bereinigt sein
+                if len(self.queue) > 0 and self.queue[0][1] == msg[1] and self.queue[0][2] == ENTER:
+                    del (self.queue[0])  # Just remove first message
+                # Sonst: Nachricht ignorieren (wurde bereits bereinigt)
             self.__cleanup_queue()  # Finally sort and cleanup the queue
         else:
+            # ERWEITERUNG: Bei Timeout Fehlerdetektion durchführen
+            self.__detect_failures()
             self.logger.info("{} timed out on RECEIVE. Local queue: {}".
-                             format(self.__mapid(),
-                                    list(map(lambda msg: (
-                                        'Clock '+str(msg[0]),
-                                        self.__mapid(msg[1]),
-                                        msg[2]), self.queue))))
+
+                format(self.__mapid(),
+
+                list(map(lambda msg: (
+
+                    'Clock '+str(msg[0]),
+
+                    self.__mapid(msg[1]),
+
+                    msg[2]), self.queue))))
 
     def init(self, peer_name, peer_type):
         self.channel.bind(self.process_id)
@@ -140,6 +188,11 @@ class Process:
 
         self.other_processes = list(self.channel.subgroup('proc'))
         self.other_processes.remove(self.process_id)
+
+        # ERWEITERUNG: Initialisiere Last-Response-Zeit für alle Prozesse
+        current_time = time.time()
+        for proc_id in self.other_processes:
+            self.last_response_time[proc_id] = current_time
 
         self.peer_name = peer_name  # assign peer name
         self.peer_type = peer_type  # assign peer behavior
@@ -153,11 +206,11 @@ class Process:
             # 1) there are more than one process left and
             # 2) this peer has active behavior and
             # 3) random is true
-            if len(self.all_processes) > 1 and \
-                    self.peer_type == ACTIVE and \
-                    random.choice([True, False]):
-                self.logger.debug("{} wants to ENTER CS at CLOCK {}."
-                                  .format(self.__mapid(), self.clock))
+            if len(self.all_processes) > 1 and self.peer_type == ACTIVE and random.choice([True, False]):
+
+                self.logger.debug("{} wants to ENTER CS at CLOCK {}.".
+
+                    format(self.__mapid(), self.clock))
 
                 self.__request_to_enter()
                 while not self.__allowed_to_enter():
@@ -165,16 +218,23 @@ class Process:
 
                 # Stay in CS for some time ...
                 sleep_time = random.randint(0, 2000)
-                self.logger.debug("{} enters CS for {} milliseconds."
-                                  .format(self.__mapid(), sleep_time))
-                print(" CS <- {}".format(self.__mapid()))
+
+                self.logger.debug("{} enters CS for {} milliseconds.".
+
+                    format(self.__mapid(), sleep_time))
+
+                print("  CS <- {}".format(self.__mapid()))
+
                 time.sleep(sleep_time/1000)
 
                 # ... then leave CS
-                print(" CS -> {}".format(self.__mapid()))
+
+                print("  CS -> {}".format(self.__mapid()))
+
                 self.__release()
                 continue
 
-            # Occasionally serve requests to enter (
+            # Occasionally serve requests to enter
+
             if random.choice([True, False]):
                 self.__receive()
