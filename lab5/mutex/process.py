@@ -2,7 +2,7 @@ import logging
 import random
 import time
 
-from constMutex import ENTER, RELEASE, ALLOW, ACTIVE
+from constMutex import CRASH_TIMEOUT, ENTER, RELEASE, ALLOW, ACTIVE
 
 
 class Process:
@@ -46,6 +46,22 @@ class Process:
         self.peer_name = 'unassigned'  # The original peer name
         self.peer_type = 'unassigned'  # A flag indicating behavior pattern
         self.logger = logging.getLogger("vs2lab.lab5.mutex.process.Process")
+        self.last_seen = {}
+
+
+    def __check_for_crash(self):
+        now = time.time()
+        crashed_processes = []
+
+        for process in list(self.other_processes):
+            if now - self.last_seen.get(process, now) > CRASH_TIMEOUT:
+                crashed_processes.append(process)
+
+        for process in crashed_processes:
+            self.logger.error(f"Process {process} crashed and will be removed")
+            self.other_processes.remove(process)
+            self.all_processes.remove(process)
+            self.__remove_from_queue(process)
 
     def __mapid(self, id='-1'):
         # format channel member address
@@ -62,6 +78,12 @@ class Process:
                 del (self.queue[0])
                 if len(self.queue) == 0:
                     break
+    def __remove_from_queue(self, process_id):
+        for msg in list(self.queue):
+            if msg[1] == process_id:
+                self.queue.remove(msg)
+
+        self.__cleanup_queue()
 
     def __request_to_enter(self):
         self.clock = self.clock + 1  # Increment clock value
@@ -92,8 +114,9 @@ class Process:
         processes_with_later_message = set([req[1] for req in self.queue[1:]])
         # Access granted if this process is first in queue and all others have answered (logically) later
         first_in_queue = self.queue[0][1] == self.process_id
-        all_have_answered = len(self.other_processes) == len(
-            processes_with_later_message)
+        working = set(self.other_processes)
+        all_have_answered = working.issubset(processes_with_later_message) # schaut ob noch alle prozesse die ok sind enthalten sind
+
         return first_in_queue and all_have_answered
 
     def __receive(self):
@@ -104,6 +127,7 @@ class Process:
 
             self.clock = max(self.clock, msg[0])  # Adjust clock value...
             self.clock = self.clock + 1  # ...and increment
+            self.last_seen[msg[1]] = time.time()
 
             self.logger.debug("{} received {} from {}.".format(
                 self.__mapid(),
@@ -131,6 +155,9 @@ class Process:
                                         self.__mapid(msg[1]),
                                         msg[2]), self.queue))))
 
+        self.__check_for_crash()
+
+
     def init(self, peer_name, peer_type):
         self.channel.bind(self.process_id)
 
@@ -143,6 +170,9 @@ class Process:
 
         self.peer_name = peer_name  # assign peer name
         self.peer_type = peer_type  # assign peer behavior
+        now = time.time()
+        for pid in self.other_processes:
+            self.last_seen[pid] = now
 
         self.logger.info("{} joined channel as {}.".format(
             peer_name, self.__mapid()))
