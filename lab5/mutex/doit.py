@@ -18,7 +18,8 @@ from process import Process
 from context import lab_channel, lab_logging
 from constMutex import BEHAVIOR_TYPES
 
-lab_logging.setup(stream_level=logging.INFO, file_level=logging.DEBUG)
+# Use WARNING for console (less noise), DEBUG for file (full details)
+lab_logging.setup(stream_level=logging.WARNING, file_level=logging.DEBUG)
 
 logger = logging.getLogger("vs2lab.lab5.mutex.doit")
 
@@ -76,17 +77,30 @@ if __name__ == "__main__":  # if script is started from command line
         peer_proc.start()
 
     # terminate a random process after some time (10 seconds)
+    print("\n" + "="*60)
+    print(" System running normally for 10 seconds...")
+    print("="*60 + "\n")
     time.sleep(10)
+    
     proc_id = random.randint(0, len(children) - 1)
     proc_to_crash = children[proc_id][0]
     type_to_crash = children[proc_id][1]
     del children[proc_id]
 
+    print("\n" + "="*60)
+    print("SIMULATING CRASH: Terminating the process {} (Type: {})".format(
+        proc_to_crash.name, type_to_crash))
+    print("="*60 + "\n")
+    
     proc_to_crash.terminate()
     proc_to_crash.join()
 
     logger.warning("Process {} of type {} has crashed.".format(
         proc_to_crash.name, type_to_crash))
+    
+    print("\n" + "="*60)
+    print(" Remaining processes should continue working...")
+    print("="*60 + "\n")
 
     # wait for peer procs to finish
     for peer_proc in children:
