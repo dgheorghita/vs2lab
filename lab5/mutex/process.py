@@ -50,7 +50,7 @@ class Process:
         # track which processes are alive
         self.alive_processes: set = set()
         self.timeout_counters: dict = {}  # consecutive timeouts per process
-        self.max_allowed_timeouts = 5
+        self.max_allowed_timeouts = 2
         self.waiting_for_response: bool = False  # True when waiting for ALLOWs
 
     def __mapid(self, id='-1'):
